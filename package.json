@@ -1,0 +1,33 @@
+{
+  "name": "datachannel-test",
+  "version": "1.0.0",
+  "description": "A minimal app to test WebRTC DataChannels",
+  "main": "bundle.js",
+  "devDependencies": {
+    "livescript-loader": "^0.1.5",
+    "webpack": "^1.12.1",
+    "webpack-dev-server": "^1.10.1"
+  },
+  "dependencies": {
+    "socket.io-client": "^1.3.6"
+  },
+  "scripts": {
+    "watch": "webpack-dev-server --progress --colors",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/Paraknight/p2p-peer.git"
+  },
+  "keywords": [
+    "webrtc",
+    "datachannel",
+    "p2p"
+  ],
+  "author": "Yousef Amar <yousef@amar.io> (http://yousefamar.com/)",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Paraknight/p2p-peer/issues"
+  },
+  "homepage": "https://github.com/Paraknight/p2p-peer#readme"
+}
