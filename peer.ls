@@ -1,6 +1,4 @@
-RTCPeerConnection     = window.webkitRTCPeerConnection or window.mozRTCPeerConnection
-RTCIceCandidate       = window.RTCIceCandidate or window.mozRTCIceCandidate
-RTCSessionDescription = window.RTCSessionDescription or window.mozRTCSessionDescription
+require! { events: EventEmitter, \socket.io-client : io, wrtc : { RTCPeerConnection, RTCIceCandidate, RTCSessionDescription } }
 
 # TODO: Check these
 ice-servers =
@@ -33,8 +31,6 @@ ice-servers =
   { url: 'turn:192.158.29.39:3478?transport=tcp' credential: 'JZEOEt2V3Qb0y27GRntt2u2PAYA=' username: '28224511:1379330808' }
 
 #log = !-> console.log it
-
-require! { events: EventEmitter, \socket.io-client : io }
 
 export class PeerNetwork extends EventEmitter
   (sig-serv-url, room-id) ->
