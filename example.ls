@@ -1,8 +1,8 @@
-require! { \./peer.ls : { PeerNetwork, Peer }}
+require! { \./peer.ls : { PeerNetwork } }
 
 log = !-> console.log it
 
-peer-net = new PeerNetwork 'localhost:9980' \test
+peer-net = new PeerNetwork 'localhost:9987' \test
   ..on \connection (peer) !->
     log "Client: Peer #{peer.uid} connected"
 

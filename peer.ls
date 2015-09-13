@@ -44,7 +44,7 @@ export class PeerNetwork extends EventEmitter
 
     self = @
 
-    @sig-serv = io 'localhost:9980'
+    @sig-serv = io sig-serv-url
       ..on \connect !->
         #log 'Client: Connected to signalling server'
 
