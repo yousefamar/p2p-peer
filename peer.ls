@@ -37,10 +37,10 @@ ice-servers =
 require! { events: EventEmitter, \socket.io-client : io }
 
 export class PeerNetwork extends EventEmitter
-  (sig-serv-url, room-id) ->
+  (sig-serv-url) ->
     @own-uid = null
 
-    peers   = {}
+    @peers = {}
 
     self = @
 
@@ -51,45 +51,72 @@ export class PeerNetwork extends EventEmitter
       ..on \uid (uid) !->
         #log "Signalling Server: Your UID is #uid"
         self.own-uid := uid
-        #log "Client: Joining room '#room-id'"
-        self.sig-serv.emit \join rid: room-id
+        self.emit \uid uid
 
-      ..on \join (uid) !->
-        #log "Signalling Server: A peer with UID #uid just joined the room"
-        peers[uid] = new Peer uid, self
-          ..on \datachannelopen  !-> self.emit \connection it
-          ..on \datachannelclose !-> delete peers[it.uid] and self.emit \disconnection it
-          ..create-data-channel "#{uid}_#{self.own-uid}"
-          ..rtc-peer.create-offer!
+      ..on \join (data) !->
+        #log "Signalling Server: A peer with UID #{data.uid} just joined the room #{data.rid}"
+        unless data.uid of self.peers
+          self.peers[data.uid] = new Peer data.uid, self
+            ..rooms.push data.rid
+            ..on \datachannelopen  !-> self.emit \connection it
+            ..on \datachannelclose !-> it.disconnect!
+            ..create-data-channel "#{data.uid}_#{self.own-uid}"
+        @emit \hail to: data.uid, rid: data.rid
+
+      ..on \hail (data) !->
+        #log "Signalling Server: A peer with UID #{data.from} just hailed us from #{data.rid}"
+        unless data.from of self.peers
+          self.peers[data.from] = new Peer data.from, self
+            ..rooms.push data.rid
+            ..on \datachannelopen  !-> self.emit \connection it
+            ..on \datachannelclose !-> it.disconnect!
+            ..create-data-channel "#{self.own-uid}_#{data.from}"
+            ..rtc-peer.create-offer!
+        else
+          self.peers[data.from].rooms.push data.rid
 
       ..on \sdp (data) !->
         sdp = data.sdp
         #log "Signalling Server: SDP #{sdp.type} received from peer with UID #{data.from}"
         if sdp.type is \offer
-          peers[data.from] = new Peer data.from, self
-            ..on \datachannelopen  !-> self.emit \connection it
-            ..on \datachannelclose !-> delete peers[it.uid] and self.emit \disconnection it
-            ..create-data-channel "#{self.own-uid}_#{data.from}"
-            ..rtc-peer.create-answer sdp
+          self.peers[data.from]?.rtc-peer.create-answer sdp
         else if sdp.type is \answer
-          peers[data.from]?.rtc-peer.set-remote-description sdp
+          self.peers[data.from]?.rtc-peer.set-remote-description sdp
 
       ..on \ice (data) !->
         #log "Signalling Server: ICE data received from peer with UID #{data.from}"
-        peers[data.from]?.rtc-peer.add-ice-candidate data.candidate
+        self.peers[data.from]?.rtc-peer.add-ice-candidate data.candidate
 
-      ..on \part (uid) !->
-        #log "Signalling Server: A peer with UID #uid just left the room"
-        peer = delete peers[uid]
-        self.emit \disconnection peer if peer
+      ..on \leave (data) !->
+        return unless data.uid of self.peers
+        peer = self.peers[data.uid]
+        unless data.rid?
+          #log "Signalling Server: A peer with UID #{data.uid} just left all rooms"
+          peer.disconnect!
+          return
+        return unless data.rid of peer.rooms
+        #log "Signalling Server: A peer with UID #{data.uid} just left the room #{data.rid}"
+        data.rid |> peer.rooms.index-of |> peer.rooms.splice _, 1
+        return unless peer.rooms.length < 1
+        peer.disconnect!
 
       ..on \disconnect !->
         #log 'Client: Disconnected from signalling server'
 
   signal: (event, data) !-> @sig-serv.emit event, data
 
+  join: (room-id) !->
+    #log "Client: Joining room '#room-id'"
+    @sig-serv.emit \join rid: room-id
+
+  leave: (room-id) !->
+    #log "Client: Leaving room '#room-id'"
+    @sig-serv.emit \leave rid: room-id
+
+
 class Peer extends EventEmitter
   (@uid, @network) ->
+    @rooms = []
     @rtc-peer = new RTCPeer uid, @
 
   create-data-channel: (label) ->
@@ -101,6 +128,14 @@ class Peer extends EventEmitter
       ..onmessage = (event) !-> event.data |> JSON.parse |> !-> self.emit it.event, it.data
 
   send: (event, data) !-> { event, data } |> JSON.stringify |> @data-channel.send
+
+  disconnect: !->
+    return unless @uid of @network.peers
+    @rooms = []
+    delete @network.peers[@uid]
+    @data-channel.close!
+    @rtc-peer.conn.close! unless @rtc-peer.conn.signaling-state is \closed
+    @emit \disconnect
 
 class RTCPeer
 
