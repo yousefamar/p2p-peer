@@ -125,7 +125,7 @@ class Peer extends EventEmitter
       ..onerror = !-> console.error "Peer #{self.uid} DataChannel Error:", it
       ..onopen  = !-> self.emit \datachannelopen  self
       ..onclose = !-> self.emit \datachannelclose self
-      ..onmessage = (event) !-> event.data |> JSON.parse |> !-> self.emit it.event, it.data
+      ..onmessage = (event) !-> event.data |> JSON.parse |> !-> self.emit \message it; self.emit it.event, it.data
 
   send: (event, data) !-> { event, data } |> JSON.stringify |> @data-channel.send
 
