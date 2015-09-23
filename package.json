@@ -1,5 +1,5 @@
 {
-  "name": "datachannel-test",
+  "name": "p2p-peer",
   "version": "1.0.0",
   "description": "A minimal app to test WebRTC DataChannels",
   "main": "peer.js",
