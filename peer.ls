@@ -78,10 +78,8 @@ export class PeerNetwork extends EventEmitter
       ..on \sdp (data) !->
         sdp = data.sdp
         #log "Signalling Server: SDP #{sdp.type} received from peer with UID #{data.from}"
-        if sdp.type is \offer
-          self.peers[data.from]?.rtc-peer.create-answer sdp
-        else if sdp.type is \answer
-          self.peers[data.from]?.rtc-peer.set-remote-description sdp
+        self.peers[data.from]?.rtc-peer.set-remote-description sdp
+        if sdp.type is \offer then self.peers[data.from]?.rtc-peer.create-answer sdp
 
       ..on \ice (data) !->
         #log "Signalling Server: ICE data received from peer with UID #{data.from}"
@@ -149,7 +147,7 @@ class RTCPeer
     self = @
     @conn = new RTCPeerConnection { ice-servers }, { optional: [ { +DtlsSrtpKeyAgreement }, { +RtpDataChannels } ] }
       ..onicecandidate = (event) !->
-        if event.candidate
+        if event.candidate?
           self.onicecandidate event.candidate
           return
         self.onsdp @local-description
@@ -160,23 +158,24 @@ class RTCPeer
   create-offer: !->
     self = @
     sdp <-! @conn.create-offer _, @on-sdp-error, media-constraints
+    # TODO: Why does this not work?!
+    #sdp.sdp .= replace /b=AS:([0-9]+)/g 'b=AS:1638400'
     self.conn.set-local-description sdp
     self.onsdp sdp
 
   create-answer: (sdp) !->
-    @set-remote-description new RTCSessionDescription sdp, @on-sdp-success, @on-sdp-error
     self = @
     sdp <-! @conn.create-answer _, @on-sdp-error, media-constraints
+    # TODO: Why does this not work?!
+    sdp.sdp .= replace /b=AS:([0-9]+)/g 'b=CT:1638400'
     self.conn.set-local-description sdp
     self.onsdp sdp
 
   set-remote-description: (sdp) !->
-    @conn.set-remote-description new RTCSessionDescription sdp, @on-sdp-success, @on-sdp-error
+    @conn.set-remote-description new RTCSessionDescription sdp
 
   add-ice-candidate: (candidate) !->
-    @conn.add-ice-candidate new RTCIceCandidate { candidate.sdp-m-line-index, candidate.candidate }
+    @conn.add-ice-candidate (new RTCIceCandidate { candidate.sdp-m-line-index, candidate.candidate }), -> , -> console.log it
 
-  onicecandidate: (candidate) !-> @peer.network.signal \ice, { candidate, to: @uid }
+  onicecandidate: (candidate) !-> @peer.network.signal \ice { candidate, to: @uid }
   onsdp: (sdp) !-> @peer.network.signal \sdp, { sdp, to: @uid }
-  on-sdp-success = ->
-  on-sdp-error = !-> console.error 'SDP error:', it.name, it.message
