@@ -1,4 +1,4 @@
-require! { \./peer.ls : { PeerNetwork } }
+require! { '../': { PeerNetwork } }
 
 log = !-> console.log it
 
