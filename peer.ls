@@ -1,7 +1,3 @@
-RTCPeerConnection     = window.webkitRTCPeerConnection or window.mozRTCPeerConnection
-RTCIceCandidate       = window.RTCIceCandidate or window.mozRTCIceCandidate
-RTCSessionDescription = window.RTCSessionDescription or window.mozRTCSessionDescription
-
 # TODO: Check these
 ice-servers =
   { url: 'stun:stun.l.google.com:19302' }
@@ -34,7 +30,7 @@ ice-servers =
 
 #log = !-> console.log it
 
-require! { events: EventEmitter, \socket.io-client : io }
+require! { events: EventEmitter, \webrtc-adapter-test, \socket.io-client : io }
 
 export class PeerNetwork extends EventEmitter
   (sig-serv-url) ->
@@ -60,7 +56,6 @@ export class PeerNetwork extends EventEmitter
             ..rooms.push data.rid
             ..on \datachannelopen  !-> self.emit \connection it
             ..on \datachannelclose !-> it.disconnect!
-            ..create-data-channel "#{data.uid}_#{self.own-uid}"
         @emit \hail to: data.uid, rid: data.rid
 
       ..on \hail (data) !->
@@ -71,19 +66,19 @@ export class PeerNetwork extends EventEmitter
             ..on \datachannelopen  !-> self.emit \connection it
             ..on \datachannelclose !-> it.disconnect!
             ..create-data-channel "#{self.own-uid}_#{data.from}"
-            ..rtc-peer.create-offer!
+            ..create-offer!
         else
           self.peers[data.from].rooms.push data.rid
 
       ..on \sdp (data) !->
         sdp = data.sdp
         #log "Signalling Server: SDP #{sdp.type} received from peer with UID #{data.from}"
-        self.peers[data.from]?.rtc-peer.set-remote-description sdp
-        if sdp.type is \offer then self.peers[data.from]?.rtc-peer.create-answer sdp
+        self.peers[data.from]?.conn.set-remote-description new RTCSessionDescription sdp
+        if sdp.type is \offer then self.peers[data.from]?.create-answer sdp
 
       ..on \ice (data) !->
         #log "Signalling Server: ICE data received from peer with UID #{data.from}"
-        self.peers[data.from]?.rtc-peer.add-ice-candidate data.candidate
+        self.peers[data.from]?.conn.add-ice-candidate new RTCIceCandidate data.candidate
 
       ..on \leave (data) !->
         return unless data.uid of self.peers
@@ -115,67 +110,49 @@ export class PeerNetwork extends EventEmitter
 class Peer extends EventEmitter
   (@uid, @network) ->
     @rooms = []
-    @rtc-peer = new RTCPeer uid, @
+    self = @
+    @conn = new RTCPeerConnection { ice-servers }
+      ..onicecandidate = (event) !-> if event.candidate? then self.network.signal \ice { event.candidate, to: self.uid }
+      ..ondatachannel = (event) !-> self.ondatachannel event.channel
+
+  create-offer: !->
+    self = @
+    sdp <-! @conn.create-offer
+    self.conn.set-local-description sdp
+    self.network.signal \sdp, { sdp, to: self.uid }
+
+  create-answer: (sdp) !->
+    self = @
+    sdp <-! @conn.create-answer
+    self.conn.set-local-description sdp
+    self.network.signal \sdp, { sdp, to: self.uid }
 
   create-data-channel: (label) ->
     self = @
-    @data-channel = @rtc-peer.conn.create-data-channel label, reliable: true
+    @data-channel = @conn.create-data-channel label
       ..onerror = !-> console.error "Peer #{self.uid} DataChannel Error:", it
       ..onopen  = !-> self.emit \datachannelopen  self
       ..onclose = !-> self.emit \datachannelclose self
-      ..onmessage = (event) !-> event.data |> JSON.parse |> !-> self.emit \message it; self.emit it.event, it.data
+      ..onmessage = (event) !-> event.data |> JSON.parse |> self.onmessage
 
-  send: (event, data) !-> { event, data } |> JSON.stringify |> @data-channel.send
+  ondatachannel: (channel) !->
+    self = @
+    @data-channel = channel
+      ..onerror = !-> console.error "Peer #{self.uid} DataChannel Error:", it
+      ..onopen  = !-> self.emit \datachannelopen  self
+      ..onclose = !-> self.emit \datachannelclose self
+      ..onmessage = (event) !-> event.data |> JSON.parse |> self.onmessage
+
+  onmessage: !->
+    @emit \message it
+    @emit it.event, it.data
+
+  send: (event, data) !-> { event, data } |> JSON.stringify |> @data-channel?.send
 
   disconnect: !->
     return unless @uid of @network.peers
     @rooms = []
     delete @network.peers[@uid]
-    @data-channel.close!
-    @rtc-peer.conn.close! unless @rtc-peer.conn.signaling-state is \closed
+    @data-channel?.close!
+    @conn.close! unless @conn.signaling-state is \closed
     @emit \disconnect
-
-class RTCPeer
-
-  media-constraints =
-    optional: []
-    mandatory:
-      OfferToReceiveAudio: false
-      OfferToReceiveVideo: false
-
-  (@uid, @peer) ->
-    self = @
-    @conn = new RTCPeerConnection { ice-servers }, { optional: [ { +DtlsSrtpKeyAgreement }, { +RtpDataChannels } ] }
-      ..onicecandidate = (event) !->
-        if event.candidate?
-          self.onicecandidate event.candidate
-          return
-        self.onsdp @local-description
-      ..ongatheringchange = (event) !->
-        return unless event.current-target and event.current-target.ice-gathering-state is \complete
-        self.onsdp @local-description
-
-  create-offer: !->
-    self = @
-    sdp <-! @conn.create-offer _, @on-sdp-error, media-constraints
-    # TODO: Why does this not work?!
-    #sdp.sdp .= replace /b=AS:([0-9]+)/g 'b=AS:1638400'
-    self.conn.set-local-description sdp
-    self.onsdp sdp
-
-  create-answer: (sdp) !->
-    self = @
-    sdp <-! @conn.create-answer _, @on-sdp-error, media-constraints
-    # TODO: Why does this not work?!
-    sdp.sdp .= replace /b=AS:([0-9]+)/g 'b=CT:1638400'
-    self.conn.set-local-description sdp
-    self.onsdp sdp
-
-  set-remote-description: (sdp) !->
-    @conn.set-remote-description new RTCSessionDescription sdp
-
-  add-ice-candidate: (candidate) !->
-    @conn.add-ice-candidate (new RTCIceCandidate { candidate.sdp-m-line-index, candidate.candidate }), -> , -> console.log it
-
-  onicecandidate: (candidate) !-> @peer.network.signal \ice { candidate, to: @uid }
-  onsdp: (sdp) !-> @peer.network.signal \sdp, { sdp, to: @uid }
