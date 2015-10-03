@@ -117,13 +117,13 @@ class Peer extends EventEmitter
 
   create-offer: !->
     self = @
-    sdp <-! @conn.create-offer
+    sdp <-! @conn.create-offer _, ->
     self.conn.set-local-description sdp
     self.network.signal \sdp, { sdp, to: self.uid }
 
   create-answer: (sdp) !->
     self = @
-    sdp <-! @conn.create-answer
+    sdp <-! @conn.create-answer _, ->
     self.conn.set-local-description sdp
     self.network.signal \sdp, { sdp, to: self.uid }
 

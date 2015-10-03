@@ -205,7 +205,7 @@
           sdp: sdp,
           to: self.uid
         });
-      });
+      }, function(){});
     };
     prototype.createAnswer = function(sdp){
       var self;
@@ -216,7 +216,7 @@
           sdp: sdp,
           to: self.uid
         });
-      });
+      }, function(){});
     };
     prototype.createDataChannel = function(label){
       var self, x$;
