@@ -300,4 +300,5 @@
     for (var key in src) if (own.call(src, key)) obj[key] = src[key];
     return obj;
   }
+	export default PeerNetwork;
 }).call(this);
