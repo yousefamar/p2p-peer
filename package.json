@@ -20,7 +20,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/Paraknight/p2p-peer.git"
+    "url": "git+ssh://git@github.com/yousefamar/p2p-peer.git"
   },
   "keywords": [
     "webrtc",
@@ -28,9 +28,9 @@
     "p2p"
   ],
   "author": "Yousef Amar <yousef@amar.io> (http://yousefamar.com/)",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
-    "url": "https://github.com/Paraknight/p2p-peer/issues"
+    "url": "https://github.com/yousefamar/p2p-peer/issues"
   },
-  "homepage": "https://github.com/Paraknight/p2p-peer#readme"
+  "homepage": "https://github.com/yousefamar/p2p-peer#readme"
 }
