@@ -6,6 +6,8 @@
   "module": "src/index.js",
   "devDependencies": {
     "@pika/plugin-build-node": "^0.3.14",
+    "@pika/plugin-build-web": "^0.3.14",
+    "@pika/plugin-bundle-web": "^0.3.14",
     "@pika/plugin-standard-pkg": "^0.3.14",
     "LiveScript": "^1.3.1",
     "livescript-loader": "^0.1.5",
@@ -38,8 +40,15 @@
   "homepage": "https://github.com/yousefamar/p2p-peer#readme",
   "@pika/pack": {
     "pipeline": [
-      ["@pika/plugin-standard-pkg"],
-      ["@pika/plugin-build-node", {}]
+      [
+        "@pika/plugin-standard-pkg"
+      ],
+      [
+        "@pika/plugin-build-web"
+      ],
+      [
+        "@pika/plugin-bundle-web"
+      ]
     ]
   }
 }
