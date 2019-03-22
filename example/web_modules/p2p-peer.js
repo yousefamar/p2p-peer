@@ -1,3 +1,39 @@
+function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) {
+  try {
+    var info = gen[key](arg);
+    var value = info.value;
+  } catch (error) {
+    reject(error);
+    return;
+  }
+
+  if (info.done) {
+    resolve(value);
+  } else {
+    Promise.resolve(value).then(_next, _throw);
+  }
+}
+
+function _asyncToGenerator(fn) {
+  return function () {
+    var self = this,
+        args = arguments;
+    return new Promise(function (resolve, reject) {
+      var gen = fn.apply(self, args);
+
+      function _next(value) {
+        asyncGeneratorStep(gen, resolve, reject, _next, _throw, "next", value);
+      }
+
+      function _throw(err) {
+        asyncGeneratorStep(gen, resolve, reject, _next, _throw, "throw", err);
+      }
+
+      _next(undefined);
+    });
+  };
+}
+
 const iceServers = [{
   url: 'stun:stun.l.google.com:19302'
 }, {
@@ -167,88 +203,93 @@ class Peer extends EventTarget {
 
 }
 
-export default class PeerNetwork extends EventTarget {
+class PeerNetwork extends EventTarget {
   constructor() {
     super();
   }
 
-  async connect(sigServUrl) {
-    var self = this;
-    sigServUrl = new URL(sigServUrl);
-    this.ownUid = null;
-    this.peers = {}; // TODO: Catch error
+  connect(sigServUrl) {
+    var _this = this;
 
-    await new Promise((resolve, reject) => {
-      let script = document.createElement('script');
-      script.type = 'text/javascript';
-      sigServUrl.pathname = '/socket.io/socket.io.js';
-      script.src = sigServUrl.href;
-      script.addEventListener('load', resolve, false);
-      script.addEventListener('error', reject, false);
-      document.body.appendChild(script);
-    });
-    let sigServ = this.sigServ = io(sigServUrl.origin);
-    sigServ.on('connect', () => {});
-    sigServ.on('uid', uid => {
-      self.ownUid = uid;
-      this.dispatchEvent(new CustomEvent('uid', {
-        detail: uid
-      }));
-    });
-    sigServ.on('join', data => {
-      if (!(data.uid in self.peers)) {
-        let peer = self.peers[data.uid] = new Peer(data.uid, self);
-        peer.rooms.push(data.rid);
-        peer.addEventListener('datachannelopen', event => self.dispatchEvent(new CustomEvent('connection', {
-          detail: peer
-        })));
-        peer.addEventListener('datachannelclose', event => peer.disconnect());
-      }
+    return _asyncToGenerator(function* () {
+      var self = _this;
+      sigServUrl = new URL(sigServUrl);
+      _this.ownUid = null;
+      _this.peers = {}; // TODO: Catch error
 
-      sigServ.emit('hail', {
-        to: data.uid,
-        rid: data.rid
+      yield new Promise((resolve, reject) => {
+        let script = document.createElement('script');
+        script.type = 'text/javascript';
+        sigServUrl.pathname = '/socket.io/socket.io.js';
+        script.src = sigServUrl.href;
+        script.addEventListener('load', resolve, false);
+        script.addEventListener('error', reject, false);
+        document.body.appendChild(script);
       });
-    });
-    sigServ.on('hail', data => {
-      if (!(data.from in self.peers)) {
-        let peer = self.peers[data.from] = new Peer(data.from, self);
-        peer.rooms.push(data.rid);
-        peer.addEventListener('datachannelopen', event => self.dispatchEvent(new CustomEvent('connection', {
-          detail: peer
-        })));
-        peer.addEventListener('datachannelclose', event => peer.disconnect());
-        peer.createDataChannel(self.ownUid + "_" + data.from);
-        peer.createOffer();
-      } else {
-        self.peers[data.from].rooms.push(data.rid);
-      }
-    });
-    sigServ.on('sdp', data => {
-      var sdp = data.sdp;
-      var peer;
-      if ((peer = self.peers[data.from]) != null) peer.conn.setRemoteDescription(new RTCSessionDescription(sdp));
-      if (sdp.type === 'offer') peer.createAnswer(sdp);
-    });
-    sigServ.on('ice', data => {
-      var peer;
-      if ((peer = self.peers[data.from]) != null) peer.conn.addIceCandidate(new RTCIceCandidate(data.candidate));
-    });
-    sigServ.on('leave', data => {
-      if (!(data.uid in self.peers)) return;
-      var peer = self.peers[data.uid];
+      let sigServ = _this.sigServ = io(sigServUrl.origin);
+      sigServ.on('connect', () => {});
+      sigServ.on('uid', uid => {
+        self.ownUid = uid;
 
-      if (data.rid == null) {
+        _this.dispatchEvent(new CustomEvent('uid', {
+          detail: uid
+        }));
+      });
+      sigServ.on('join', data => {
+        if (!(data.uid in self.peers)) {
+          let peer = self.peers[data.uid] = new Peer(data.uid, self);
+          peer.rooms.push(data.rid);
+          peer.addEventListener('datachannelopen', event => self.dispatchEvent(new CustomEvent('connection', {
+            detail: peer
+          })));
+          peer.addEventListener('datachannelclose', event => peer.disconnect());
+        }
+
+        sigServ.emit('hail', {
+          to: data.uid,
+          rid: data.rid
+        });
+      });
+      sigServ.on('hail', data => {
+        if (!(data.from in self.peers)) {
+          let peer = self.peers[data.from] = new Peer(data.from, self);
+          peer.rooms.push(data.rid);
+          peer.addEventListener('datachannelopen', event => self.dispatchEvent(new CustomEvent('connection', {
+            detail: peer
+          })));
+          peer.addEventListener('datachannelclose', event => peer.disconnect());
+          peer.createDataChannel(self.ownUid + "_" + data.from);
+          peer.createOffer();
+        } else {
+          self.peers[data.from].rooms.push(data.rid);
+        }
+      });
+      sigServ.on('sdp', data => {
+        var sdp = data.sdp;
+        var peer;
+        if ((peer = self.peers[data.from]) != null) peer.conn.setRemoteDescription(new RTCSessionDescription(sdp));
+        if (sdp.type === 'offer') peer.createAnswer(sdp);
+      });
+      sigServ.on('ice', data => {
+        var peer;
+        if ((peer = self.peers[data.from]) != null) peer.conn.addIceCandidate(new RTCIceCandidate(data.candidate));
+      });
+      sigServ.on('leave', data => {
+        if (!(data.uid in self.peers)) return;
+        var peer = self.peers[data.uid];
+
+        if (data.rid == null) {
+          peer.disconnect();
+          return;
+        }
+
+        if (!(data.rid in peer.rooms)) return;
+        peer.rooms.splice(peer.rooms.indexOf(data.rid), 1);
+        if (!(peer.rooms.length < 1)) return;
         peer.disconnect();
-        return;
-      }
-
-      if (!(data.rid in peer.rooms)) return;
-      peer.rooms.splice(peer.rooms.indexOf(data.rid), 1);
-      if (!(peer.rooms.length < 1)) return;
-      peer.disconnect();
-    });
-    sigServ.on('disconnect', () => {});
+      });
+      sigServ.on('disconnect', () => {});
+    })();
   }
 
   signal(event, data) {
@@ -268,3 +309,6 @@ export default class PeerNetwork extends EventTarget {
   }
 
 }
+
+export default PeerNetwork;
+//# sourceMappingURL=p2p-peer.js.map
