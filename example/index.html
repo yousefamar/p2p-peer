@@ -1,8 +1,40 @@
+<!DOCTYPE html>
 <html>
 	<head>
-		<meta charset="utf-8">
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width" />
+		<title>P2P-peer Example</title>
+		<script type="module" charset="utf-8">
+			import PeerNetwork from './web_modules/p2p-peer.js';
+
+			window.addEventListener('DOMContentLoaded', async (event) => {
+				const peerNet = new PeerNetwork();
+
+				await peerNet.connect('https://sig.amar.io');
+
+				peerNet.addEventListener('connection', event => {
+					let peer = event.detail;
+
+					console.log('Peer', peer.uid, 'connected');
+
+					peer.addEventListener('greeting', event => console.log('Peer', peer.uid + ':', event.detail));
+
+					peer.addEventListener('disconnect', () => console.log('Peer', peer.uid, 'disconnected'));
+
+					console.log('Peer', peerNet.ownUid, '(us): Hi from', peerNet.ownUid + '!');
+
+					peer.send('greeting', 'Hi from ' + peerNet.ownUid + '!');
+				});
+
+				peerNet.addEventListener('uid', event => {
+					let uid = event.detail;
+					console.log(uid);
+
+					peerNet.join('test');
+				});
+			});
+		</script>
 	</head>
 	<body>
-		<script src="bundle.js" charset="utf-8"></script>
 	</body>
 </html>

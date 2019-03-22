@@ -1,0 +1,36 @@
+{
+  "name": "p2p-peer",
+  "description": "A minimal app to test WebRTC DataChannels",
+  "version": "1.1.1",
+  "license": "MIT",
+  "esnext": "dist-src/index.js",
+  "module": "dist-web/index.js",
+  "main": "dist-node/index.js",
+  "pika": true,
+  "sideEffects": false,
+  "keywords": [
+    "webrtc",
+    "datachannel",
+    "p2p"
+  ],
+  "files": [
+    "dist-*/",
+    "assets/",
+    "bin/"
+  ],
+  "homepage": "https://github.com/yousefamar/p2p-peer#readme",
+  "bugs": {
+    "url": "https://github.com/yousefamar/p2p-peer/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/yousefamar/p2p-peer.git"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@pika/plugin-build-node": "^0.3.14",
+    "@pika/plugin-build-web": "^0.3.14",
+    "@pika/plugin-bundle-web": "^0.3.14",
+    "@pika/plugin-standard-pkg": "^0.3.14"
+  }
+}
