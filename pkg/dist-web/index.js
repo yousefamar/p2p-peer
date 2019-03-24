@@ -34,161 +34,102 @@ function _asyncToGenerator(fn) {
   };
 }
 
-const iceServers = [{
-  url: 'stun:stun.l.google.com:19302'
-}, {
-  url: 'stun:stun1.l.google.com:19302'
-}, {
-  url: 'stun:stun2.l.google.com:19302'
-}, {
-  url: 'stun:stun3.l.google.com:19302'
-}, {
-  url: 'stun:stun4.l.google.com:19302'
-}, {
-  url: 'stun:stun.services.mozilla.com'
-}, {
-  url: 'stun:23.21.150.121'
-}, {
-  url: 'stun:stun.anyfirewall.com:3478'
-}, {
-  url: 'stun:stun01.sipphone.com'
-}, {
-  url: 'stun:stun.ekiga.net'
-}, {
-  url: 'stun:stun.fwdnet.net'
-}, {
-  url: 'stun:stun.ideasip.com'
-}, {
-  url: 'stun:stun.iptel.org'
-}, {
-  url: 'stun:stun.rixtelecom.se'
-}, {
-  url: 'stun:stun.schlund.de'
-}, {
-  url: 'stun:stunserver.org'
-}, {
-  url: 'stun:stun.softjoys.com'
-}, {
-  url: 'stun:stun.voiparound.com'
-}, {
-  url: 'stun:stun.voipbuster.com'
-}, {
-  url: 'stun:stun.voipstunt.com'
-}, {
-  url: 'stun:stun.voxgratia.org'
-}, {
-  url: 'stun:stun.xten.com'
-}, {
-  url: 'turn:turn.bistri.com:80',
-  credential: 'homeo',
-  username: 'homeo'
-}, {
-  url: 'turn:turn.anyfirewall.com:443?transport=tcp',
-  credential: 'webrtc',
-  username: 'webrtc'
-}, {
-  url: 'turn:numb.viagenie.ca',
-  credential: 'muazkh',
-  username: 'webrtc@live.com'
-}, {
-  url: 'turn:192.158.29.39:3478?transport=udp',
-  credential: 'JZEOEt2V3Qb0y27GRntt2u2PAYA=',
-  username: '28224511:1379330808'
-}, {
-  url: 'turn:192.158.29.39:3478?transport=tcp',
-  credential: 'JZEOEt2V3Qb0y27GRntt2u2PAYA=',
-  username: '28224511:1379330808'
-}];
+// TODO: Use three.js' built-in implementation instead?
+class EventEmitter {
+  constructor() {
+    this.listeners = {};
+  }
 
-class Peer extends EventTarget {
+  on(event, callback) {
+    this.listeners[event] = this.listeners[event] || [];
+    this.listeners[event].push(callback);
+  }
+
+  removeListener(event, callback) {
+    this.listeners[event] = this.listeners[event] || [];
+    let id = this.listeners[event].indexOf(callback);
+    if (id < 0) return;
+    this.listeners[event].splice(id, 1);
+  }
+
+  emit(event) {
+    this.listeners[event] = this.listeners[event] || [];
+
+    for (var _len = arguments.length, data = new Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
+      data[_key - 1] = arguments[_key];
+    }
+
+    for (let callback of this.listeners[event]) callback(...data);
+  }
+
+}
+
+class Peer extends EventEmitter {
   constructor(uid, network) {
     super();
-    var self = this;
     this.uid = uid;
     this.network = network;
     this.rooms = [];
-    let conn = this.conn = new RTCPeerConnection({
-      iceServers: iceServers
+    this.conn = new RTCPeerConnection();
+
+    this.conn.onicecandidate = event => event.candidate && this.network.signal('ice', {
+      to: this.uid,
+      candidate: event.candidate
     });
 
-    conn.onicecandidate = event => {
-      if (event.candidate != null) {
-        self.network.signal('ice', {
-          candidate: event.candidate,
-          to: self.uid
-        });
-      }
-    };
-
-    conn.ondatachannel = event => {
-      self.ondatachannel(event.channel);
-    };
+    this.conn.ondatachannel = event => this.ondatachannel(event.channel);
   }
 
   createOffer() {
-    var self = this;
-    this.conn.createOffer(sdp => {
-      self.conn.setLocalDescription(sdp);
-      self.network.signal('sdp', {
-        sdp: sdp,
-        to: self.uid
-      });
-    }, () => {});
+    this.conn.createOffer().then(offer => this.conn.setLocalDescription(offer)).then(() => this.network.signal('sdp', {
+      to: this.uid,
+      sdp: this.conn.localDescription
+    })).catch(error => console.error('Error creating connection offer:', error));
   }
 
   createAnswer(sdp) {
-    var self = this;
-    this.conn.createAnswer(sdp => {
-      self.conn.setLocalDescription(sdp);
-      self.network.signal('sdp', {
-        sdp: sdp,
-        to: self.uid
-      });
-    }, () => {});
-  }
+    this.conn.createAnswer().then(answer => this.conn.setLocalDescription(answer)).then(() => this.network.signal('sdp', {
+      to: this.uid,
+      sdp: this.conn.localDescription
+    })).catch(error => console.error('Error creating connection answer:', error));
+  } // TODO: Support reliable and unreliable
+
 
   createDataChannel(label) {
-    var self = this;
-    let dataChannel = this.dataChannel = this.conn.createDataChannel(label);
-
-    dataChannel.onerror = error => console.error("Peer " + self.uid + " DataChannel Error:", error);
-
-    dataChannel.onopen = () => self.dispatchEvent(new Event('datachannelopen'));
-
-    dataChannel.onclose = () => self.dispatchEvent(new Event('datachannelclose'));
-
-    dataChannel.onmessage = event => self.onmessage(JSON.parse(event.data));
-
-    return dataChannel;
+    this.dataChannel = this.conn.createDataChannel(label);
+    this.ondatachannel(this.dataChannel);
   }
 
   ondatachannel(channel) {
-    var self = this;
-    let dataChannel = this.dataChannel = channel;
+    this.dataChannel = channel;
 
-    dataChannel.onerror = error => console.error("Peer " + self.uid + " DataChannel Error:", error);
+    channel.onerror = error => console.error('Peer', this.uid, 'DataChannel error:', error);
 
-    dataChannel.onopen = () => self.dispatchEvent(new Event('datachannelopen'));
+    channel.onopen = () => this.emit('datachannelopen', this);
 
-    dataChannel.onclose = () => self.dispatchEvent(new Event('datachannelclose'));
+    channel.onclose = () => this.emit('datachannelclose', this);
 
-    dataChannel.onmessage = event => self.onmessage(JSON.parse(event.data));
+    channel.onmessage = event => this.onmessage(event.data);
   }
 
   onmessage(message) {
-    this.dispatchEvent(new CustomEvent('message', {
-      detail: message
-    }));
-    this.dispatchEvent(new CustomEvent(message.event, {
-      detail: message.data
-    }));
+    try {
+      message = JSON.parse(message);
+    } catch (e) {
+      console.error('Invalid data received from', this.uid, ':', message, e);
+      return;
+    }
+
+    this.emit('message', message); // TODO: Validate this too
+
+    this.emit(message.event, message.data);
   }
 
   send(event, data) {
-    if (this.dataChannel == null) return;
+    if (this.dataChannel == null || this.dataChannel.readyState !== 'open') return;
     this.dataChannel.send(JSON.stringify({
-      event: event,
-      data: data
+      event,
+      data
     }));
   }
 
@@ -197,115 +138,150 @@ class Peer extends EventTarget {
     this.rooms = [];
     delete this.network.peers[this.uid];
     if (this.dataChannel != null) this.dataChannel.close();
-    if (this.conn.signalingState !== 'closed') this.conn.close();
-    this.dispatchEvent(new Event('disconnect'));
+    if (this.conn.signalingState !== 'closed') this.conn.close(); // TODO: Reconnect if wrongful DC
+
+    this.emit('disconnect');
   }
 
 }
 
-class PeerNetwork extends EventTarget {
+class PeerNetwork extends EventEmitter {
   constructor() {
     super();
+    this.ownUID = null;
+    this.peers = {};
   }
 
-  connect(sigServUrl) {
+  signal(event) {
+    for (var _len = arguments.length, args = new Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
+      args[_key - 1] = arguments[_key];
+    }
+
+    this.sigServ.emit(event, ...args);
+    return this;
+  }
+
+  join(roomID) {
+    console.log('Joining room', roomID);
+    this.sigServ.emit('join', {
+      rid: roomID
+    });
+    return this;
+  }
+
+  leave(roomID) {
+    console.log('Leaving room', roomID);
+    this.sigServ.emit('leave', {
+      rid: roomID
+    });
+    return this;
+  }
+
+  broadcast(event, data) {
+    for (let uid in this.peers) this.peers[uid].send(event, data);
+  }
+
+  connect(sigServURL) {
     var _this = this;
 
     return _asyncToGenerator(function* () {
-      var self = _this;
-      sigServUrl = new URL(sigServUrl);
-      _this.ownUid = null;
-      _this.peers = {}; // TODO: Catch error
+      sigServURL = new URL(sigServURL); // TODO: Catch error
 
       yield new Promise((resolve, reject) => {
         let script = document.createElement('script');
         script.type = 'text/javascript';
-        sigServUrl.pathname = '/socket.io/socket.io.js';
-        script.src = sigServUrl.href;
+        sigServURL.pathname = '/socket.io/socket.io.js';
+        script.src = sigServURL.href;
         script.addEventListener('load', resolve, false);
         script.addEventListener('error', reject, false);
         document.body.appendChild(script);
       });
-      let sigServ = _this.sigServ = io(sigServUrl.origin);
-      sigServ.on('connect', () => {});
-      sigServ.on('uid', uid => {
-        self.ownUid = uid;
+      _this.sigServ = io(sigServURL.origin);
 
-        _this.dispatchEvent(new CustomEvent('uid', {
-          detail: uid
-        }));
+      _this.sigServ.on('connect', () => {//console.log('Peer connected to signalling server');
       });
-      sigServ.on('join', data => {
-        if (!(data.uid in self.peers)) {
-          let peer = self.peers[data.uid] = new Peer(data.uid, self);
+
+      _this.sigServ.on('disconnect', () => {//console.log('Peer disconnected from signalling server');
+      });
+
+      _this.sigServ.on('uid', uid => {
+        //console.log('Peer UID is', uid);
+        _this.ownUID = uid;
+
+        _this.emit('uid', uid);
+      });
+
+      _this.sigServ.on('join', data => {
+        //console.log('A peer with UID', data.uid, 'just joined the room', data.rid);
+        if (!(data.uid in _this.peers)) {
+          let peer = new Peer(data.uid, _this);
           peer.rooms.push(data.rid);
-          peer.addEventListener('datachannelopen', event => self.dispatchEvent(new CustomEvent('connection', {
-            detail: peer
-          })));
-          peer.addEventListener('datachannelclose', event => peer.disconnect());
+          peer.on('datachannelopen', peer => _this.emit('connection', peer));
+          peer.on('datachannelclose', peer => peer.disconnect());
+          peer.on('disconnect', () => _this.emit('disconnection', peer));
+          _this.peers[data.uid] = peer;
         }
 
-        sigServ.emit('hail', {
+        _this.sigServ.emit('hail', {
           to: data.uid,
           rid: data.rid
         });
       });
-      sigServ.on('hail', data => {
-        if (!(data.from in self.peers)) {
-          let peer = self.peers[data.from] = new Peer(data.from, self);
-          peer.rooms.push(data.rid);
-          peer.addEventListener('datachannelopen', event => self.dispatchEvent(new CustomEvent('connection', {
-            detail: peer
-          })));
-          peer.addEventListener('datachannelclose', event => peer.disconnect());
-          peer.createDataChannel(self.ownUid + "_" + data.from);
-          peer.createOffer();
-        } else {
-          self.peers[data.from].rooms.push(data.rid);
+
+      _this.sigServ.on('hail', data => {
+        //console.log('A peer with UID', data.from, 'just hailed from', data.rid);
+        if (data.from in _this.peers) {
+          _this.peers[data.from].rooms.push(data.rid);
+
+          return;
         }
+
+        let peer = new Peer(data.from, _this);
+        peer.rooms.push(data.rid);
+        peer.on('datachannelopen', peer => _this.emit('connection', peer));
+        peer.on('datachannelclose', peer => peer.disconnect());
+        peer.on('disconnect', () => _this.emit('disconnection', peer));
+        peer.createDataChannel(_this.ownUID + '_' + data.from);
+        peer.createOffer();
+        _this.peers[data.from] = peer;
       });
-      sigServ.on('sdp', data => {
-        var sdp = data.sdp;
-        var peer;
-        if ((peer = self.peers[data.from]) != null) peer.conn.setRemoteDescription(new RTCSessionDescription(sdp));
-        if (sdp.type === 'offer') peer.createAnswer(sdp);
+
+      _this.sigServ.on('sdp', data => {
+        let sdp = data.sdp; //console.log('SDP', sdp.type, 'received from peer with UID', data.from);
+
+        if (_this.peers[data.from] == null) return;
+
+        _this.peers[data.from].conn.setRemoteDescription(new RTCSessionDescription(sdp));
+
+        if (sdp.type === 'offer') _this.peers[data.from].createAnswer(sdp);
       });
-      sigServ.on('ice', data => {
-        var peer;
-        if ((peer = self.peers[data.from]) != null) peer.conn.addIceCandidate(new RTCIceCandidate(data.candidate));
+
+      _this.sigServ.on('ice', data => {
+        //console.log('ICE data received from peer with UID', data.from);
+        if (_this.peers[data.from] == null) return;
+
+        _this.peers[data.from].conn.addIceCandidate(new RTCIceCandidate(data.candidate));
       });
-      sigServ.on('leave', data => {
-        if (!(data.uid in self.peers)) return;
-        var peer = self.peers[data.uid];
+
+      _this.sigServ.on('leave', data => {
+        if (!(data.uid in _this.peers)) return;
+        let peer = _this.peers[data.uid];
 
         if (data.rid == null) {
+          //console.log('A peer with UID', data.uid, 'just left all rooms');
           peer.disconnect();
           return;
         }
 
-        if (!(data.rid in peer.rooms)) return;
+        if (!(data.rid in peer.rooms)) return; //console.log('A peer with UID', data.uid, 'just left the room', data.rid);
+
         peer.rooms.splice(peer.rooms.indexOf(data.rid), 1);
-        if (!(peer.rooms.length < 1)) return;
+        if (peer.rooms.length > 0) return;
         peer.disconnect();
       });
-      sigServ.on('disconnect', () => {});
+
+      return _this;
     })();
-  }
-
-  signal(event, data) {
-    this.sigServ.emit(event, data);
-  }
-
-  join(roomId) {
-    this.sigServ.emit('join', {
-      rid: roomId
-    });
-  }
-
-  leave(roomId) {
-    this.sigServ.emit('leave', {
-      rid: roomId
-    });
   }
 
 }

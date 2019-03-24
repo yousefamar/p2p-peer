@@ -12,22 +12,19 @@
 
 				await peerNet.connect('https://sig.amar.io');
 
-				peerNet.addEventListener('connection', event => {
-					let peer = event.detail;
-
+				peerNet.on('connection', peer => {
 					console.log('Peer', peer.uid, 'connected');
 
-					peer.addEventListener('greeting', event => console.log('Peer', peer.uid + ':', event.detail));
+					peer.on('greeting', msg => console.log('Peer', peer.uid + ':', msg));
 
-					peer.addEventListener('disconnect', () => console.log('Peer', peer.uid, 'disconnected'));
+					peer.on('disconnect', () => console.log('Peer', peer.uid, 'disconnected'));
 
-					console.log('Peer', peerNet.ownUid, '(us): Hi from', peerNet.ownUid + '!');
+					console.log('Peer', peerNet.ownUID, '(us): Hi from', peerNet.ownUID + '!');
 
-					peer.send('greeting', 'Hi from ' + peerNet.ownUid + '!');
+					peer.send('greeting', 'Hi from ' + peerNet.ownUID + '!');
 				});
 
-				peerNet.addEventListener('uid', event => {
-					let uid = event.detail;
+				peerNet.on('uid', uid => {
 					console.log(uid);
 
 					peerNet.join('test');
