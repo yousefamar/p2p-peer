@@ -53,7 +53,7 @@ class EventEmitter {
   }
 
   emit(event) {
-    this.listeners[event] = this.listeners[event] || [];
+    this.listeners[event] = this.listeners[event] || []; // TODO: Wrap in try-catch
 
     for (var _len = arguments.length, data = new Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
       data[_key - 1] = arguments[_key];
@@ -62,6 +62,35 @@ class EventEmitter {
     for (let callback of this.listeners[event]) callback(...data);
   }
 
+}
+
+function createHandler(objectPath, eventEmitter) {
+  return {
+    set: (target, prop, value) => {
+      eventEmitter.emit(objectPath + '.' + prop, value); // Emit on root too to have a catch-all
+
+      eventEmitter.emit('.', objectPath + '.' + prop, value);
+      if (typeof value === 'object' && !!value) value = observe(value, objectPath + '.' + prop, eventEmitter).object;
+      target[prop] = value;
+      return true;
+    }
+  };
+}
+
+function observe(object) {
+  let objectPath = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : '';
+  let eventEmitter = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : new EventEmitter();
+
+  for (let key in object) {
+    let value = object[key];
+    if (typeof value !== 'object' || !value) continue;
+    object[key] = observe(object[key], objectPath + '.' + key, eventEmitter).object;
+  }
+
+  return {
+    object: new Proxy(object, createHandler(objectPath, eventEmitter)),
+    eventEmitter: eventEmitter
+  };
 }
 
 class Peer extends EventEmitter {
@@ -150,6 +179,22 @@ class PeerNetwork extends EventEmitter {
     super();
     this.ownUID = null;
     this.peers = {};
+    this.rooms = {};
+    this.on('connection', peer => {
+      peer.on('sync', (_ref) => {
+        let roomID = _ref.roomID,
+            objectPath = _ref.objectPath,
+            value = _ref.value;
+        // TODO: Error handling
+        objectPath = objectPath.substr(1).split('.');
+        let prop = objectPath.pop();
+        let object = this.rooms[roomID].syncedData;
+
+        while (objectPath.length) object = object[objectPath.shift()];
+
+        object[prop] = value;
+      });
+    });
   }
 
   signal(event) {
@@ -166,7 +211,28 @@ class PeerNetwork extends EventEmitter {
     this.sigServ.emit('join', {
       rid: roomID
     });
-    return this;
+
+    if (!(roomID in this.rooms)) {
+      let _observe = observe({}),
+          syncedData = _observe.object,
+          eventEmitter = _observe.eventEmitter;
+
+      this.rooms[roomID] = {
+        syncedData,
+        eventEmitter
+      };
+      eventEmitter.on('.', (objectPath, value) => {
+        // TODO: Remove temporary filthy hack to prevent broadcast storm, introduce ownership
+        if (objectPath.substr(1).startsWith(this.ownUID)) //this.roomcast(roomID, 'sync', { roomID, objectPath, value });
+          this.signal('roomcast', {
+            rid: roomID,
+            objectPath,
+            value
+          });
+      });
+    }
+
+    return this.rooms[roomID];
   }
 
   leave(roomID) {
@@ -174,11 +240,21 @@ class PeerNetwork extends EventEmitter {
     this.sigServ.emit('leave', {
       rid: roomID
     });
-    return this;
+
+    if (roomID in this.rooms) {
+      this.rooms[roomID].eventEmitter.listeners = {};
+      delete this.rooms[roomID];
+    }
   }
 
   broadcast(event, data) {
     for (let uid in this.peers) this.peers[uid].send(event, data);
+  }
+
+  roomcast(roomID, event, data) {
+    // TODO: Store peers in room data structure
+    // TODO: Implement
+    this.broadcast(event, data);
   }
 
   connect(sigServURL) {
@@ -188,6 +264,18 @@ class PeerNetwork extends EventEmitter {
       sigServURL = new URL(sigServURL); // TODO: Catch error
 
       yield new Promise((resolve, reject) => {
+        if (typeof window === 'undefined') {
+          global.io = require('socket.io-client');
+
+          let wrtc = require('wrtc');
+
+          global.RTCPeerConnection = wrtc.RTCPeerConnection;
+          global.RTCSessionDescription = wrtc.RTCSessionDescription;
+          global.RTCIceCandidate = wrtc.RTCIceCandidate;
+          resolve();
+          return;
+        }
+
         let script = document.createElement('script');
         script.type = 'text/javascript';
         sigServURL.pathname = '/socket.io/socket.io.js';
@@ -261,6 +349,21 @@ class PeerNetwork extends EventEmitter {
         if (_this.peers[data.from] == null) return;
 
         _this.peers[data.from].conn.addIceCandidate(new RTCIceCandidate(data.candidate));
+      });
+
+      _this.sigServ.on('roomcast', data => {
+        // TODO: Error handling
+        let roomID = data.rid,
+            objectPath = data.objectPath,
+            value = data.value;
+        objectPath = objectPath.substr(1).split('.');
+        let prop = objectPath.pop();
+
+        let object = _this.rooms[roomID.substr(1)].syncedData;
+
+        while (objectPath.length) object = object[objectPath.shift()];
+
+        object[prop] = value;
       });
 
       _this.sigServ.on('leave', data => {

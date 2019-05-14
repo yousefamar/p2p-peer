@@ -1,0 +1,13 @@
+{
+  "name": "p2p-peer-evaluation",
+  "version": "1.0.0",
+  "description": "Evaluation scripts for p2p-peer",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Yousef Amar <yousef@amar.io> (http://yousefamar.com/)",
+  "license": "MIT",
+  "dependencies": {
+    "p2p-peer": "file:../pkg/"
+  }
+}

@@ -22,6 +22,7 @@ export default class EventEmitter {
 	emit(event, ...data) {
 		this.listeners[event] = this.listeners[event] || [];
 
+		// TODO: Wrap in try-catch
 		for (let callback of this.listeners[event])
 			callback(...data);
 	}

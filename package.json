@@ -10,7 +10,10 @@
     "@pika/plugin-bundle-web": "^0.3.14",
     "@pika/plugin-standard-pkg": "^0.3.14"
   },
-  "dependencies": {},
+  "dependencies": {
+    "socket.io-client": "^2.2.0",
+    "wrtc": "^0.4.1"
+  },
   "scripts": {
     "build": "pack build"
   },

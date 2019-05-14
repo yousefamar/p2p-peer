@@ -27,7 +27,11 @@
 				peerNet.on('uid', uid => {
 					console.log(uid);
 
-					peerNet.join('test');
+					let room = peerNet.join('test');
+					room.eventEmitter.on('.', console.log);
+					setInterval(() => {
+						room.syncedData[uid] = Math.random();
+					}, 1000);
 				});
 			});
 		</script>
