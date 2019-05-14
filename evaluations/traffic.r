@@ -65,9 +65,9 @@ ggplot(data, aes(x=peers, y=speed, group=Implementation)) +
 		#axis.text.x      = element_text(angle = 90, hjust = 1, vjust = 0.5),
 		#axis.title      = element_text(size = 20, face="bold")
 		axis.title       = element_text(size = 30),
-		legend.text      = element_text(size = 24),
-		legend.title     = element_text(size = 24),
-		legend.position  = c (0.25, 0.85)
+		legend.text      = element_text(size = 30),
+		legend.title     = element_text(size = 30),
+		legend.position  = c(0.25, 0.75)
 	)
 
 ggsave('traffic.pdf', width = 12)
