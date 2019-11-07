@@ -1,6 +1,8 @@
 library(ggplot2)
 library(sitools)
 
+library(extrafont)
+
 #format_si <- function(...) {
 #	# Based on code by Ben Tupper
 #	# https://stat.ethz.ch/pipermail/r-help/2012-January/299804.html
@@ -71,3 +73,4 @@ ggplot(data, aes(x=peers, y=speed, group=Implementation)) +
 	)
 
 ggsave('traffic.pdf', width = 12)
+embed_fonts('traffic.pdf')
