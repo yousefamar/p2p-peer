@@ -8,10 +8,12 @@
 			import PeerNetwork from './web_modules/p2p-peer.js';
 
 			window.addEventListener('DOMContentLoaded', async (event) => {
-				const peerNet = new PeerNetwork();
+				const peerNet = window.peerNet = new PeerNetwork();
 
-				await peerNet.connect('https://sig.amar.io');
+				//await peerNet.connect('https://sig.amar.io');
+				await peerNet.connect('http://192.168.0.25:8090');
 
+				let k = 0;
 				peerNet.on('connection', peer => {
 					console.log('Peer', peer.uid, 'connected');
 
@@ -19,9 +21,10 @@
 
 					peer.on('disconnect', () => console.log('Peer', peer.uid, 'disconnected'));
 
-					console.log('Peer', peerNet.ownUID, '(us): Hi from', peerNet.ownUID + '!');
+					//console.log('Peer', peerNet.ownUID, '(us): Hi from', peerNet.ownUID + '!');
 
-					peer.send('greeting', 'Hi from ' + peerNet.ownUID + '!');
+					//peer.send('greeting', 'Hi from ' + peerNet.ownUID + '!');
+					console.log(++k);
 				});
 
 				peerNet.on('uid', uid => {
@@ -29,9 +32,9 @@
 
 					let room = peerNet.join('test');
 					room.eventEmitter.on('.', console.log);
-					setInterval(() => {
-						room.syncedData[uid] = Math.random();
-					}, 1000);
+					//setInterval(() => {
+					//	room.syncedData[uid] = Math.random();
+					//}, 1000);
 				});
 			});
 		</script>

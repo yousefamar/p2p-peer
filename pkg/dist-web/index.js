@@ -107,6 +107,8 @@ class Peer extends EventEmitter {
     });
 
     this.conn.ondatachannel = event => this.ondatachannel(event.channel);
+
+    this.conn.ontrack = event => this.stream = event.streams[0];
   }
 
   createOffer() {
@@ -180,6 +182,7 @@ class PeerNetwork extends EventEmitter {
     this.ownUID = null;
     this.peers = {};
     this.rooms = {};
+    this.stream = null;
     this.on('connection', peer => {
       peer.on('sync', (_ref) => {
         let roomID = _ref.roomID,
@@ -195,6 +198,10 @@ class PeerNetwork extends EventEmitter {
         object[prop] = value;
       });
     });
+  }
+
+  setStream(stream) {
+    this.stream = stream;
   }
 
   signal(event) {
@@ -307,6 +314,7 @@ class PeerNetwork extends EventEmitter {
           peer.on('datachannelopen', peer => _this.emit('connection', peer));
           peer.on('datachannelclose', peer => peer.disconnect());
           peer.on('disconnect', () => _this.emit('disconnection', peer));
+          if (_this.stream != null) _this.stream.getTracks().forEach(track => peer.conn.addTrack(track, _this.stream));
           _this.peers[data.uid] = peer;
         }
 
@@ -330,6 +338,7 @@ class PeerNetwork extends EventEmitter {
         peer.on('datachannelclose', peer => peer.disconnect());
         peer.on('disconnect', () => _this.emit('disconnection', peer));
         peer.createDataChannel(_this.ownUID + '_' + data.from);
+        if (_this.stream != null) _this.stream.getTracks().forEach(track => peer.conn.addTrack(track, _this.stream));
         peer.createOffer();
         _this.peers[data.from] = peer;
       });

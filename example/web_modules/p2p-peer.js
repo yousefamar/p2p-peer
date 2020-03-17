@@ -107,6 +107,8 @@ class Peer extends EventEmitter {
     });
 
     this.conn.ondatachannel = event => this.ondatachannel(event.channel);
+
+    this.conn.ontrack = event => this.stream = event.streams[0];
   }
 
   createOffer() {
@@ -180,6 +182,7 @@ class PeerNetwork extends EventEmitter {
     this.ownUID = null;
     this.peers = {};
     this.rooms = {};
+    this.stream = null;
     this.on('connection', peer => {
       peer.on('sync', (_ref) => {
         let roomID = _ref.roomID,
@@ -195,6 +198,10 @@ class PeerNetwork extends EventEmitter {
         object[prop] = value;
       });
     });
+  }
+
+  setStream(stream) {
+    this.stream = stream;
   }
 
   signal(event) {
@@ -223,11 +230,12 @@ class PeerNetwork extends EventEmitter {
       };
       eventEmitter.on('.', (objectPath, value) => {
         // TODO: Remove temporary filthy hack to prevent broadcast storm, introduce ownership
-        if (objectPath.substr(1).startsWith(this.ownUID)) this.roomcast(roomID, 'sync', {
-          roomID,
-          objectPath,
-          value
-        });
+        if (objectPath.substr(1).startsWith(this.ownUID)) //this.roomcast(roomID, 'sync', { roomID, objectPath, value });
+          this.signal('roomcast', {
+            rid: roomID,
+            objectPath,
+            value
+          });
       });
     }
 
@@ -263,6 +271,18 @@ class PeerNetwork extends EventEmitter {
       sigServURL = new URL(sigServURL); // TODO: Catch error
 
       yield new Promise((resolve, reject) => {
+        if (typeof window === 'undefined') {
+          global.io = require('socket.io-client');
+
+          let wrtc = require('wrtc');
+
+          global.RTCPeerConnection = wrtc.RTCPeerConnection;
+          global.RTCSessionDescription = wrtc.RTCSessionDescription;
+          global.RTCIceCandidate = wrtc.RTCIceCandidate;
+          resolve();
+          return;
+        }
+
         let script = document.createElement('script');
         script.type = 'text/javascript';
         sigServURL.pathname = '/socket.io/socket.io.js';
@@ -294,6 +314,7 @@ class PeerNetwork extends EventEmitter {
           peer.on('datachannelopen', peer => _this.emit('connection', peer));
           peer.on('datachannelclose', peer => peer.disconnect());
           peer.on('disconnect', () => _this.emit('disconnection', peer));
+          if (_this.stream != null) _this.stream.getTracks().forEach(track => peer.conn.addTrack(track, _this.stream));
           _this.peers[data.uid] = peer;
         }
 
@@ -317,6 +338,7 @@ class PeerNetwork extends EventEmitter {
         peer.on('datachannelclose', peer => peer.disconnect());
         peer.on('disconnect', () => _this.emit('disconnection', peer));
         peer.createDataChannel(_this.ownUID + '_' + data.from);
+        if (_this.stream != null) _this.stream.getTracks().forEach(track => peer.conn.addTrack(track, _this.stream));
         peer.createOffer();
         _this.peers[data.from] = peer;
       });
@@ -336,6 +358,21 @@ class PeerNetwork extends EventEmitter {
         if (_this.peers[data.from] == null) return;
 
         _this.peers[data.from].conn.addIceCandidate(new RTCIceCandidate(data.candidate));
+      });
+
+      _this.sigServ.on('roomcast', data => {
+        // TODO: Error handling
+        let roomID = data.rid,
+            objectPath = data.objectPath,
+            value = data.value;
+        objectPath = objectPath.substr(1).split('.');
+        let prop = objectPath.pop();
+
+        let object = _this.rooms[roomID.substr(1)].syncedData;
+
+        while (objectPath.length) object = object[objectPath.shift()];
+
+        object[prop] = value;
       });
 
       _this.sigServ.on('leave', data => {
@@ -362,4 +399,3 @@ class PeerNetwork extends EventEmitter {
 }
 
 export default PeerNetwork;
-//# sourceMappingURL=p2p-peer.js.map
