@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width" />
+		<title>P2P-peer Example</title>
+		<script type="module" charset="utf-8">
+			import PeerNetwork from './web_modules/p2p-peer.js';
+
+			window.addEventListener('DOMContentLoaded', async (event) => {
+				const peerNet = window.peerNet = new PeerNetwork();
+
+				//await peerNet.connect('https://sig.amar.io');
+				//await peerNet.connect('http://192.168.56.101:8090');
+				await peerNet.connect('http://localhost:8090');
+
+				let start = null;
+				let amSecondary = false;
+				let times = 0;
+
+				peerNet.on('connection', peer => {
+					//console.log('Peer', peer.uid, 'connected');
+					//peer.on('disconnect', () => console.log('Peer', peer.uid, 'disconnected'));
+					if (amSecondary) {
+						peer.disconnect();
+						return;
+					}
+
+					console.log(new Date() - start);
+
+					peer.disconnect();
+					peerNet.leave('/test');
+					if (++times > 30) {
+						console.log('done');
+						times = 0;
+						return;
+					}
+					setTimeout(() => {
+						start = new Date();
+						let room = peerNet.join('test');
+					}, 500);
+				});
+
+				peerNet.on('uid', uid => {
+					//console.log(uid);
+					document.getElementById('startButton').disabled = false;
+					document.getElementById('joinButton').disabled = false;
+				});
+
+				window.startSending = function() {
+					start = new Date();
+					let room = peerNet.join('test');
+				};
+
+				window.join = function() {
+					amSecondary = true;
+					let room = peerNet.join('test');
+				};
+			});
+		</script>
+	</head>
+	<body>
+		<button id="startButton" onclick="startSending()" disabled>Start Sending</button>
+		<button id="joinButton" onclick="join()" disabled>Join</button>
+	</body>
+</html>

@@ -1,9 +1,9 @@
-const PeerNetwork = require('p2p-peer').default;
+const PeerNetwork = require('./index.js').default;
 
 (async () => {
 	const peerNet = new PeerNetwork();
 
-	await peerNet.connect('http://localhost:8081');
+	await peerNet.connect('http://localhost:8090');
 
 	peerNet.on('connection', peer => {
 		console.log('Peer', peer.uid, 'connected');
@@ -22,8 +22,8 @@ const PeerNetwork = require('p2p-peer').default;
 
 		let room = peerNet.join('test');
 		room.eventEmitter.on('.', console.log);
-		setInterval(() => {
-			room.syncedData[uid] = Math.random();
-		}, 100);
+		//setInterval(() => {
+		//	room.syncedData[uid] = Math.random();
+		//}, 100);
 	});
 })();
