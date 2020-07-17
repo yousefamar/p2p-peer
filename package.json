@@ -5,6 +5,7 @@
   "main": "src/index.js",
   "module": "src/index.js",
   "devDependencies": {
+    "@pika/pack": "^0.5.0",
     "@pika/plugin-build-node": "^0.3.14",
     "@pika/plugin-build-web": "^0.3.14",
     "@pika/plugin-bundle-web": "^0.3.14",
@@ -15,7 +16,7 @@
     "wrtc": "^0.4.1"
   },
   "scripts": {
-    "build": "pack build"
+    "build": "pika-pack build"
   },
   "repository": {
     "type": "git",

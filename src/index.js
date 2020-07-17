@@ -9,14 +9,25 @@ class Peer extends EventEmitter {
 		this.uid = uid;
 		this.network = network;
 		this.rooms = [];
+		this.stream = new MediaStream();
 
-		this.conn  = new RTCPeerConnection();
+		this.conn = new RTCPeerConnection({
+			iceServers: [
+				{
+					url: 'stun:stun.amar.io:5349'
+				}, {
+					url: 'turn:turn.amar.io:5349',
+					credential: 'allyourbase',
+					username: 'guest'
+				}
+			]
+		});
 		this.conn.onicecandidate = event => event.candidate && this.network.signal('ice', {
 			to: this.uid,
 			candidate: event.candidate
 		});
 		this.conn.ondatachannel = event => this.ondatachannel(event.channel);
-		this.conn.ontrack = event => this.stream = event.streams[0];
+		this.conn.ontrack = event => this.stream.addTrack(event.track, this.stream);
 	}
 
 	createOffer() {
@@ -46,8 +57,8 @@ class Peer extends EventEmitter {
 	}
 
 	ondatachannel(channel) {
-		this.dataChannel = channel;
-		channel.onerror   = error => console.error('Peer', this.uid, 'DataChannel error:', error);
+		this.dataChannel  = channel;
+		channel.onerror   = error => this.emit('datachannelclose', this) || console.error('Peer', this.uid, 'DataChannel error:', error);
 		channel.onopen    = () => this.emit('datachannelopen',  this);
 		channel.onclose   = () => this.emit('datachannelclose', this);
 		channel.onmessage = event => this.onmessage(event.data);
@@ -159,6 +170,7 @@ export default class PeerNetwork extends EventEmitter {
 
 		// TODO: Catch error
 		await new Promise((resolve, reject) => {
+			/*
 			if (typeof window === 'undefined') {
 				global.io = require('socket.io-client');
 				let wrtc  = require('wrtc');
@@ -168,6 +180,7 @@ export default class PeerNetwork extends EventEmitter {
 				resolve();
 				return;
 			}
+			*/
 			let script = document.createElement('script');
 			script.type = 'text/javascript';
 			sigServURL.pathname = '/socket.io/socket.io.js';
@@ -181,10 +194,12 @@ export default class PeerNetwork extends EventEmitter {
 
 		this.sigServ.on('connect', () => {
 			//console.log('Peer connected to signalling server');
+			this.emit('sigconnect');
 		});
 
 		this.sigServ.on('disconnect', () => {
 			//console.log('Peer disconnected from signalling server');
+			this.emit('sigdisconnect');
 		});
 
 		this.sigServ.on('uid', uid => {
@@ -201,8 +216,7 @@ export default class PeerNetwork extends EventEmitter {
 				peer.on('datachannelopen',  peer => this.emit('connection', peer));
 				peer.on('datachannelclose', peer => peer.disconnect());
 				peer.on('disconnect', () => this.emit('disconnection', peer));
-				if (this.stream != null)
-					this.stream.getTracks().forEach(track => peer.conn.addTrack(track, this.stream));
+				this.stream.getTracks().forEach(track => peer.conn.addTrack(track, this.stream));
 				this.peers[data.uid] = peer;
 			}
 			this.sigServ.emit('hail', { to: data.uid, rid: data.rid });
@@ -221,8 +235,7 @@ export default class PeerNetwork extends EventEmitter {
 			peer.on('datachannelclose', peer => peer.disconnect());
 			peer.on('disconnect', () => this.emit('disconnection', peer));
 			peer.createDataChannel(this.ownUID + '_' + data.from);
-			if (this.stream != null)
-				this.stream.getTracks().forEach(track => peer.conn.addTrack(track, this.stream));
+			this.stream.getTracks().forEach(track => peer.conn.addTrack(track, this.stream));
 			peer.createOffer();
 			this.peers[data.from] = peer;
 		});

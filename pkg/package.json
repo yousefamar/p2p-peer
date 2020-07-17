@@ -3,20 +3,16 @@
   "description": "A minimal app to test WebRTC DataChannels",
   "version": "3.0.0",
   "license": "MIT",
-  "esnext": "dist-src/index.js",
-  "module": "dist-web/index.js",
-  "main": "dist-node/index.js",
+  "files": [
+    "dist-*/",
+    "bin/"
+  ],
   "pika": true,
   "sideEffects": false,
   "keywords": [
     "webrtc",
     "datachannel",
     "p2p"
-  ],
-  "files": [
-    "dist-*/",
-    "assets/",
-    "bin/"
   ],
   "homepage": "https://github.com/yousefamar/p2p-peer#readme",
   "bugs": {
@@ -31,9 +27,13 @@
     "wrtc": "^0.4.1"
   },
   "devDependencies": {
+    "@pika/pack": "^0.5.0",
     "@pika/plugin-build-node": "^0.3.14",
     "@pika/plugin-build-web": "^0.3.14",
     "@pika/plugin-bundle-web": "^0.3.14",
     "@pika/plugin-standard-pkg": "^0.3.14"
-  }
+  },
+  "esnext": "dist-src/index.js",
+  "module": "dist-web/index.js",
+  "main": "dist-node/index.js"
 }

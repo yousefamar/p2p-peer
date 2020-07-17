@@ -99,7 +99,16 @@ class Peer extends EventEmitter {
     this.uid = uid;
     this.network = network;
     this.rooms = [];
-    this.conn = new RTCPeerConnection();
+    this.stream = new MediaStream();
+    this.conn = new RTCPeerConnection({
+      iceServers: [{
+        url: 'stun:stun.amar.io:5349'
+      }, {
+        url: 'turn:turn.amar.io:5349',
+        credential: 'allyourbase',
+        username: 'guest'
+      }]
+    });
 
     this.conn.onicecandidate = event => event.candidate && this.network.signal('ice', {
       to: this.uid,
@@ -108,7 +117,7 @@ class Peer extends EventEmitter {
 
     this.conn.ondatachannel = event => this.ondatachannel(event.channel);
 
-    this.conn.ontrack = event => this.stream = event.streams[0];
+    this.conn.ontrack = event => this.stream.addTrack(event.track, this.stream);
   }
 
   createOffer() {
@@ -134,7 +143,7 @@ class Peer extends EventEmitter {
   ondatachannel(channel) {
     this.dataChannel = channel;
 
-    channel.onerror = error => console.error('Peer', this.uid, 'DataChannel error:', error);
+    channel.onerror = error => this.emit('datachannelclose', this) || console.error('Peer', this.uid, 'DataChannel error:', error);
 
     channel.onopen = () => this.emit('datachannelopen', this);
 
@@ -271,18 +280,17 @@ class PeerNetwork extends EventEmitter {
       sigServURL = new URL(sigServURL); // TODO: Catch error
 
       yield new Promise((resolve, reject) => {
+        /*
         if (typeof window === 'undefined') {
-          global.io = require('socket.io-client');
-
-          let wrtc = require('wrtc');
-
-          global.RTCPeerConnection = wrtc.RTCPeerConnection;
-          global.RTCSessionDescription = wrtc.RTCSessionDescription;
-          global.RTCIceCandidate = wrtc.RTCIceCandidate;
-          resolve();
-          return;
+        	global.io = require('socket.io-client');
+        	let wrtc  = require('wrtc');
+        	global.RTCPeerConnection     = wrtc.RTCPeerConnection;
+        	global.RTCSessionDescription = wrtc.RTCSessionDescription;
+        	global.RTCIceCandidate       = wrtc.RTCIceCandidate;
+        	resolve();
+        	return;
         }
-
+        */
         let script = document.createElement('script');
         script.type = 'text/javascript';
         sigServURL.pathname = '/socket.io/socket.io.js';
@@ -293,10 +301,14 @@ class PeerNetwork extends EventEmitter {
       });
       _this.sigServ = io(sigServURL.origin);
 
-      _this.sigServ.on('connect', () => {//console.log('Peer connected to signalling server');
+      _this.sigServ.on('connect', () => {
+        //console.log('Peer connected to signalling server');
+        _this.emit('sigconnect');
       });
 
-      _this.sigServ.on('disconnect', () => {//console.log('Peer disconnected from signalling server');
+      _this.sigServ.on('disconnect', () => {
+        //console.log('Peer disconnected from signalling server');
+        _this.emit('sigdisconnect');
       });
 
       _this.sigServ.on('uid', uid => {
@@ -314,7 +326,9 @@ class PeerNetwork extends EventEmitter {
           peer.on('datachannelopen', peer => _this.emit('connection', peer));
           peer.on('datachannelclose', peer => peer.disconnect());
           peer.on('disconnect', () => _this.emit('disconnection', peer));
-          if (_this.stream != null) _this.stream.getTracks().forEach(track => peer.conn.addTrack(track, _this.stream));
+
+          _this.stream.getTracks().forEach(track => peer.conn.addTrack(track, _this.stream));
+
           _this.peers[data.uid] = peer;
         }
 
@@ -338,7 +352,9 @@ class PeerNetwork extends EventEmitter {
         peer.on('datachannelclose', peer => peer.disconnect());
         peer.on('disconnect', () => _this.emit('disconnection', peer));
         peer.createDataChannel(_this.ownUID + '_' + data.from);
-        if (_this.stream != null) _this.stream.getTracks().forEach(track => peer.conn.addTrack(track, _this.stream));
+
+        _this.stream.getTracks().forEach(track => peer.conn.addTrack(track, _this.stream));
+
         peer.createOffer();
         _this.peers[data.from] = peer;
       });
