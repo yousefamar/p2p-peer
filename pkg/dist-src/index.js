@@ -178,6 +178,10 @@ export default class PeerNetwork extends EventEmitter {
     this.broadcast(event, data);
   }
 
+  replaceTrack(index, track) {
+    for (const uid in this.peers) return this.peers[uid].conn.getSenders()[index].replaceTrack(track);
+  }
+
   async connect(sigServURL) {
     sigServURL = new URL(sigServURL); // TODO: Catch error
 

@@ -289,6 +289,10 @@ class PeerNetwork extends EventEmitter {
     this.broadcast(event, data);
   }
 
+  replaceTrack(index, track) {
+    for (const uid in this.peers) return this.peers[uid].conn.getSenders()[index].replaceTrack(track);
+  }
+
   connect(sigServURL) {
     var _this = this;
 
