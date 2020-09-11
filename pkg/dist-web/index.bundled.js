@@ -274,7 +274,11 @@ class PeerNetwork extends EventEmitter {
   }
 
   replaceTrack(index, track) {
-    for (const uid in this.peers) return this.peers[uid].conn.getSenders()[index].replaceTrack(track);
+    return Promise.all(Object.values(this.peers).map(p => p.conn.getSenders()[index].replaceTrack(track)));
+  }
+
+  replaceAudio(track) {
+    return Promise.all(Object.values(this.peers).map(p => p.conn.getSenders().filter(s => s.track.kind === 'audio')[0].replaceTrack(track)));
   }
 
   connect(sigServURL) {
