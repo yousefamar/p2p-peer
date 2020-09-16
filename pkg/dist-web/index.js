@@ -121,17 +121,57 @@ class Peer extends EventEmitter {
   }
 
   createOffer() {
-    this.conn.createOffer().then(offer => this.conn.setLocalDescription(offer)).then(() => this.network.signal('sdp', {
-      to: this.uid,
-      sdp: this.conn.localDescription
-    })).catch(error => console.error('Error creating connection offer:', error));
+    this.conn.createOffer().then(offer => this.conn.setLocalDescription(offer)).then(() => {
+      let payload = {
+        to: this.uid,
+        sdp: this.conn.localDescription.toJSON()
+      };
+      const text = this.conn.localDescription.sdp.split('\r\n');
+      let opusLine = text.filter(l => l.includes('opus'));
+
+      if (opusLine.length) {
+        opusLine = opusLine[0];
+        const id = opusLine.split(':')[1].split(' ')[0];
+        console.log('opus line:', opusLine, id);
+        const fmtpLineID = text.findIndex(l => l.startsWith('a=fmtp:' + id));
+
+        if (fmtpLineID >= 0) {
+          console.log('old fmtp line', text[fmtpLineID], fmtpLineID);
+          text[fmtpLineID] = 'a=fmtp:' + id + ' maxplaybackrate=8000; sprop-maxcapturerate=8000';
+          console.log('new fmtp line', text[fmtpLineID], fmtpLineID);
+          payload.sdp.sdp = text.join('\r\n');
+        }
+      }
+
+      this.network.signal('sdp', payload);
+    }).catch(error => console.error('Error creating connection offer:', error));
   }
 
   createAnswer(sdp) {
-    this.conn.createAnswer().then(answer => this.conn.setLocalDescription(answer)).then(() => this.network.signal('sdp', {
-      to: this.uid,
-      sdp: this.conn.localDescription
-    })).catch(error => console.error('Error creating connection answer:', error));
+    this.conn.createAnswer().then(answer => this.conn.setLocalDescription(answer)).then(() => {
+      let payload = {
+        to: this.uid,
+        sdp: this.conn.localDescription.toJSON()
+      };
+      const text = this.conn.localDescription.sdp.split('\r\n');
+      let opusLine = text.filter(l => l.includes('opus'));
+
+      if (opusLine.length) {
+        opusLine = opusLine[0];
+        const id = opusLine.split(':')[1].split(' ')[0];
+        console.log('opus line:', opusLine, id);
+        const fmtpLineID = text.findIndex(l => l.startsWith('a=fmtp:' + id));
+
+        if (fmtpLineID >= 0) {
+          console.log('old fmtp line', text[fmtpLineID], fmtpLineID);
+          text[fmtpLineID] = 'a=fmtp:' + id + ' maxplaybackrate=8000; sprop-maxcapturerate=8000';
+          console.log('new fmtp line', text[fmtpLineID], fmtpLineID);
+          payload.sdp.sdp = text.join('\r\n');
+        }
+      }
+
+      this.network.signal('sdp', payload);
+    }).catch(error => console.error('Error creating connection answer:', error));
   } // TODO: Support reliable and unreliable
 
 
@@ -370,6 +410,7 @@ class PeerNetwork extends EventEmitter {
       _this.sigServ.on('sdp', data => {
         let sdp = data.sdp; //console.log('SDP', sdp.type, 'received from peer with UID', data.from);
 
+        console.log('got sdp', sdp);
         if (_this.peers[data.from] == null) return;
 
         _this.peers[data.from].conn.setRemoteDescription(new RTCSessionDescription(sdp));
