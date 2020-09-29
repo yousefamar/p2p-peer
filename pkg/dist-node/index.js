@@ -121,9 +121,9 @@ class Peer extends EventEmitter {
     this.stream = new MediaStream();
     this.conn = new RTCPeerConnection({
       iceServers: [{
-        url: 'stun:stun.amar.io:5349'
+        urls: 'stun:stun.amar.io:5349'
       }, {
-        url: 'turn:turn.amar.io:5349',
+        urls: 'turn:turn.amar.io:5349',
         credential: 'allyourbase',
         username: 'guest'
       }]
