@@ -1,15 +1,21 @@
-import EventEmitter from './event-emitter.js';
-import observe from './observe.js';
+import EventEmitter from './event-emitter';
+
+import { io } from 'socket.io-client';
 
 class Peer extends EventEmitter {
 
-	constructor(uid, network) {
+	uid: string;
+	rooms: string[];
+	network: PeerNetwork;
+	conn: RTCPeerConnection;
+	dataChannel: RTCDataChannel | undefined;
+
+	constructor(uid: string, network: PeerNetwork) {
 		super();
 
 		this.uid = uid;
 		this.network = network;
 		this.rooms = [];
-		//this.stream = new MediaStream();
 
 		this.conn = new RTCPeerConnection({
 			iceServers: [
@@ -27,8 +33,6 @@ class Peer extends EventEmitter {
 			candidate: event.candidate
 		});
 		this.conn.ondatachannel = event => this.ondatachannel(event.channel);
-		if (this.stream)
-			this.conn.ontrack = event => this.stream.addTrack(event.track, this.stream);
 	}
 
 	createOffer() {
@@ -37,81 +41,57 @@ class Peer extends EventEmitter {
 			.then(() => {
 				let payload = {
 					to:  this.uid,
-					sdp: this.conn.localDescription.toJSON()
+					sdp: this.conn.localDescription?.toJSON()
 				};
-				const text = this.conn.localDescription.sdp.split('\r\n');
-				let opusLine = text.filter(l => l.includes('opus'));
-				if (opusLine.length) {
-					opusLine = opusLine[0];
-					const id = opusLine.split(':')[1].split(' ')[0];
-					console.log('opus line:', opusLine, id);
-					const fmtpLineID = text.findIndex(l => l.startsWith('a=fmtp:' + id))
-					if (fmtpLineID >= 0) {
-						console.log('old fmtp line', text[fmtpLineID], fmtpLineID);
-						text[fmtpLineID] = 'a=fmtp:' + id + ' maxplaybackrate=8000; sprop-maxcapturerate=8000';
-						console.log('new fmtp line', text[fmtpLineID], fmtpLineID);
-						payload.sdp.sdp = text.join('\r\n');
-					}
-				}
 				this.network.signal('sdp', payload);
 			})
 			.catch(error => console.error('Error creating connection offer:', error));
 	}
 
-	createAnswer(sdp) {
+	createAnswer() {
 		this.conn.createAnswer()
 			.then(answer => this.conn.setLocalDescription(answer))
 			.then(() => {
 				let payload = {
 					to:  this.uid,
-					sdp: this.conn.localDescription.toJSON()
+					sdp: this.conn.localDescription?.toJSON()
 				};
-				const text = this.conn.localDescription.sdp.split('\r\n');
-				let opusLine = text.filter(l => l.includes('opus'));
-				if (opusLine.length) {
-					opusLine = opusLine[0];
-					const id = opusLine.split(':')[1].split(' ')[0];
-					console.log('opus line:', opusLine, id);
-					const fmtpLineID = text.findIndex(l => l.startsWith('a=fmtp:' + id))
-					if (fmtpLineID >= 0) {
-						console.log('old fmtp line', text[fmtpLineID], fmtpLineID);
-						text[fmtpLineID] = 'a=fmtp:' + id + ' maxplaybackrate=8000; sprop-maxcapturerate=8000';
-						console.log('new fmtp line', text[fmtpLineID], fmtpLineID);
-						payload.sdp.sdp = text.join('\r\n');
-					}
-				}
 				this.network.signal('sdp', payload);
 			})
 			.catch(error => console.error('Error creating connection answer:', error));
 	}
 
 	// TODO: Support reliable and unreliable
-	createDataChannel(label) {
+	createDataChannel(label: string) {
 		this.dataChannel = this.conn.createDataChannel(label)
 		this.ondatachannel(this.dataChannel);
 	}
 
-	ondatachannel(channel) {
+	ondatachannel(channel: RTCDataChannel) {
 		this.dataChannel  = channel;
-		channel.onerror   = error => this.emit('datachannelclose', this) || console.error('Peer', this.uid, 'DataChannel error:', error);
+		channel.onerror   = error => {
+			this.emit('datachannelclose', this);
+			console.error('Peer', this.uid, 'DataChannel error:', error);
+		};
 		channel.onopen    = () => this.emit('datachannelopen',  this);
 		channel.onclose   = () => this.emit('datachannelclose', this);
 		channel.onmessage = event => this.onmessage(event.data);
 	}
 
-	onmessage(message) {
+	onmessage(message: string) {
+		let parsedMsg;
 		try {
-			message = JSON.parse(message);
+			parsedMsg = JSON.parse(message);
 		} catch(e) {
 			console.error('Invalid data received from', this.uid, ':', message, e);
 			return;
 		}
-		this.emit('message', message);
+		this.emit('message', parsedMsg);
 		// TODO: Validate this too
-		this.emit(message.event, message.data);
+		this.emit(parsedMsg.event, parsedMsg.data);
 	}
 
-	send(event, data) {
+	send(event: string, data: any) {
 		if (this.dataChannel == null || this.dataChannel.readyState !== 'open')
 			return;
 
@@ -135,112 +115,45 @@ class Peer extends EventEmitter {
 
 export default class PeerNetwork extends EventEmitter {
 
+	ownUID: string;
+	peers: Record<string, Peer>;
+	sigServ: any;
+
 	constructor() {
 		super();
 
-		this.ownUID = null;
+		this.ownUID = '';
 		this.peers  = {};
-		this.rooms  = {};
-		this.stream = null;
-
-		this.on('connection', peer => {
-			peer.on('sync', ({ roomID, objectPath, value }) => {
-				// TODO: Error handling
-				objectPath = objectPath.substr(1).split('.');
-				let prop   = objectPath.pop();
-				let object = this.rooms[roomID].syncedData;
-				while (objectPath.length) object = object[objectPath.shift()];
-				object[prop] = value;
-			});
-		});
 	}
 
-	setStream(stream) {
-		//this.stream = stream;
-	}
-
-	signal(event, ...args) {
+	signal(event: string, ...args: any[]) {
 		this.sigServ.emit(event, ...args);
 		return this;
 	}
 
-	join(roomID) {
+	join(roomID: string) {
 		console.log('Joining room', roomID);
 		this.sigServ.emit('join', { rid: roomID });
-		if (!(roomID in this.rooms)) {
-			let { object: syncedData, eventEmitter } = observe({});
-			this.rooms[roomID] = { syncedData, eventEmitter };
-			eventEmitter.on('.', (objectPath, value) => {
-				// TODO: Remove temporary filthy hack to prevent broadcast storm, introduce ownership
-				if (objectPath.substr(1).startsWith(this.ownUID))
-					//this.roomcast(roomID, 'sync', { roomID, objectPath, value });
-					this.signal('roomcast', { rid: roomID, objectPath, value });
-			});
-		}
-		return this.rooms[roomID];
 	}
 
-	leave(roomID) {
+	leave(roomID: string) {
 		console.log('Leaving room', roomID);
 		this.sigServ.emit('leave', { rid: roomID });
-		if (roomID in this.rooms) {
-			this.rooms[roomID].eventEmitter.listeners = {};
-			delete this.rooms[roomID];
-		}
 	}
 
-	broadcast(event, data) {
+	broadcast(event: string, data: any) {
 		for (let uid in this.peers)
 			this.peers[uid].send(event, data);
 	}
 
-	roomcast(roomID, event, data) {
-		// TODO: Store peers in room data structure
-		// TODO: Implement
-		this.broadcast(event, data);
-	}
-
-	replaceTrack(index, track) {
-		return Promise.all(Object.values(this.peers).map(p => p.conn.getSenders()[index].replaceTrack(track)));
-	}
-
-	replaceAudio(track) {
-		return Promise.all(Object.values(this.peers).map(p => p.conn.getSenders().filter(s => s.track.kind === 'audio')[0].replaceTrack(track)));
-	}
-
-	async connect(sigServURL) {
-		sigServURL = new URL(sigServURL);
-
-		// TODO: Catch error
-		await new Promise((resolve, reject) => {
-			/*
-			if (typeof window === 'undefined') {
-				global.io = require('socket.io-client');
-				let wrtc  = require('wrtc');
-				global.RTCPeerConnection     = wrtc.RTCPeerConnection;
-				global.RTCSessionDescription = wrtc.RTCSessionDescription;
-				global.RTCIceCandidate       = wrtc.RTCIceCandidate;
-				resolve();
-				return;
-			}
-			*/
-			let script = document.createElement('script');
-			script.type = 'text/javascript';
-			sigServURL.pathname = '/socket.io/socket.io.js';
-			script.src = sigServURL.href;
-			script.addEventListener('load', resolve, false);
-			script.addEventListener('error', reject, false);
-			document.body.appendChild(script);
-		});
+	connect(sigServURLString: string) {
+		const sigServURL = new URL(sigServURLString);
 
 		this.sigServ = io(sigServURL.origin);
-
-		let hasConnected = false;
 
 		this.sigServ.on('connect', () => {
 			//console.log('Peer connected to signalling server');
 			this.emit('sigconnect');
-			hasConnected = true;
 		});
 
 		this.sigServ.on('disconnect', () => {
@@ -248,32 +161,26 @@ export default class PeerNetwork extends EventEmitter {
 			this.emit('sigdisconnect');
 		});
 
-		this.sigServ.on('uid', uid => {
+		this.sigServ.on('uid', (uid: string) => {
 			//console.log('Peer UID is', uid);
 			this.ownUID = uid;
 			this.emit('uid', uid);
 		});
 
-		this.sigServ.on('chime', data => {
-			this.emit('chime', data);
-		});
-
-		this.sigServ.on('join', data => {
+		this.sigServ.on('join', (data: { uid: string, rid: string }) => {
 			//console.log('A peer with UID', data.uid, 'just joined the room', data.rid);
 			if (!(data.uid in this.peers)) {
-				let peer = new Peer(data.uid, this);
+				const peer = new Peer(data.uid, this);
 				peer.rooms.push(data.rid);
-				peer.on('datachannelopen',  peer => this.emit('connection', peer));
-				peer.on('datachannelclose', peer => peer.disconnect());
+				peer.on('datachannelopen',  (peer: Peer) => this.emit('connection', peer));
+				peer.on('datachannelclose', (peer: Peer) => peer.disconnect());
 				peer.on('disconnect', () => this.emit('disconnection', peer));
-				if (this.stream)
-					this.stream.getTracks().forEach(track => peer.conn.addTrack(track, this.stream));
 				this.peers[data.uid] = peer;
 			}
 			this.sigServ.emit('hail', { to: data.uid, rid: data.rid });
 		});
 
-		this.sigServ.on('hail', data => {
+		this.sigServ.on('hail', (data: { from: string, rid: string }) => {
 			//console.log('A peer with UID', data.from, 'just hailed from', data.rid);
 			if (data.from in this.peers) {
 				this.peers[data.from].rooms.push(data.rid);
@@ -282,20 +189,17 @@ export default class PeerNetwork extends EventEmitter {
 
 			let peer = new Peer(data.from, this);
 			peer.rooms.push(data.rid);
-			peer.on('datachannelopen',  peer => this.emit('connection', peer));
-			peer.on('datachannelclose', peer => peer.disconnect());
+			peer.on('datachannelopen',  (peer: Peer) => this.emit('connection', peer));
+			peer.on('datachannelclose', (peer: Peer) => peer.disconnect());
 			peer.on('disconnect', () => this.emit('disconnection', peer));
 			peer.createDataChannel(this.ownUID + '_' + data.from);
-			if (this.stream)
-				this.stream.getTracks().forEach(track => peer.conn.addTrack(track, this.stream));
 			peer.createOffer();
 			this.peers[data.from] = peer;
 		});
 
-		this.sigServ.on('sdp', data => {
+		this.sigServ.on('sdp', (data: { from: string, sdp: any }) => {
 			let sdp = data.sdp;
 			//console.log('SDP', sdp.type, 'received from peer with UID', data.from);
-			console.log('got sdp', sdp);
 
 			if (this.peers[data.from] == null)
 				return;
@@ -303,10 +207,10 @@ export default class PeerNetwork extends EventEmitter {
 			this.peers[data.from].conn.setRemoteDescription(new RTCSessionDescription(sdp));
 
 			if (sdp.type === 'offer')
-				this.peers[data.from].createAnswer(sdp);
+				this.peers[data.from].createAnswer();
 		});
 
-		this.sigServ.on('ice', data => {
+		this.sigServ.on('ice', (data: { from: string, candidate: RTCIceCandidateInit }) => {
 			//console.log('ICE data received from peer with UID', data.from);
 
 			if (this.peers[data.from] == null)
@@ -315,17 +219,7 @@ export default class PeerNetwork extends EventEmitter {
 			this.peers[data.from].conn.addIceCandidate(new RTCIceCandidate(data.candidate));
 		});
 
-		this.sigServ.on('roomcast', data => {
-			// TODO: Error handling
-			let { rid: roomID, objectPath, value } = data;
-			objectPath = objectPath.substr(1).split('.');
-			let prop   = objectPath.pop();
-			let object = this.rooms[roomID.substr(1)].syncedData;
-			while (objectPath.length) object = object[objectPath.shift()];
-			object[prop] = value;
-		});
-
-		this.sigServ.on('leave', data => {
+		this.sigServ.on('leave', (data: { uid: string, rid: string }) => {
 			if (!(data.uid in this.peers))
 				return;
 
@@ -350,12 +244,9 @@ export default class PeerNetwork extends EventEmitter {
 			peer.disconnect();
 		});
 
-		if (!hasConnected)
-			await new Promise(resolve => {
-				this.sigServ.on('connect', () => {
-					resolve();
-				});
-			});
+		this.sigServ.on('connect_error', (e: Error) => {
+			console.error(e);
+		});
 
 		return this;
 	}

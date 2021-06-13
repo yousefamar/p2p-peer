@@ -2,7 +2,6 @@
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
-		<link rel="icon" type="image/svg+xml" href="favicon.svg" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>P2P-peer Example</title>
 	</head>
@@ -13,9 +12,8 @@
 			window.addEventListener('DOMContentLoaded', async (event) => {
 				const peerNet = window.peerNet = new PeerNetwork();
 
-				await peerNet.connect('https://sig.amar.io');
+				peerNet.connect('http://sig.amar.io');
 
-				let k = 0;
 				peerNet.on('connection', peer => {
 					console.log('Peer', peer.uid, 'connected');
 
@@ -23,20 +21,13 @@
 
 					peer.on('disconnect', () => console.log('Peer', peer.uid, 'disconnected'));
 
-					//console.log('Peer', peerNet.ownUID, '(us): Hi from', peerNet.ownUID + '!');
-
-					//peer.send('greeting', 'Hi from ' + peerNet.ownUID + '!');
-					console.log(++k);
+					peer.send('greeting', 'Hi from ' + peerNet.ownUID + '!');
 				});
 
-				peerNet.on('uid', uid => {
+				peerNet.on('uid', async uid => {
 					console.log(uid);
 
-					let room = peerNet.join('test');
-					room.eventEmitter.on('.', console.log);
-					//setInterval(() => {
-					//	room.syncedData[uid] = Math.random();
-					//}, 1000);
+					await peerNet.join('test');
 				});
 			});
 		</script>

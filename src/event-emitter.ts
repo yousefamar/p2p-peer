@@ -1,15 +1,17 @@
 // TODO: Use three.js' built-in implementation instead?
 export default class EventEmitter {
+	listeners: any;
+
 	constructor() {
 		this.listeners = {};
 	}
 
-	on(event, callback) {
+	on(event: string, callback: Function) {
 		this.listeners[event] = this.listeners[event] || [];
 		this.listeners[event].push(callback);
 	}
 
-	removeListener(event, callback) {
+	removeListener(event: string, callback: Function) {
 		this.listeners[event] = this.listeners[event] || [];
 
 		let id = this.listeners[event].indexOf(callback);
@@ -19,7 +21,7 @@ export default class EventEmitter {
 		this.listeners[event].splice(id, 1);
 	}
 
-	emit(event, ...data) {
+	emit(event: string, ...data: any[]) {
 		this.listeners[event] = this.listeners[event] || [];
 
 		// TODO: Wrap in try-catch
