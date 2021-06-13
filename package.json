@@ -1,22 +1,21 @@
 {
   "name": "p2p-peer",
-  "version": "3.0.0",
-  "description": "A minimal app to test WebRTC DataChannels",
+  "version": "4.0.0",
+  "description": "Scalable multiplayer for the web",
   "main": "src/index.js",
   "module": "src/index.js",
   "devDependencies": {
-    "@pika/pack": "^0.5.0",
-    "@pika/plugin-build-node": "^0.3.14",
-    "@pika/plugin-build-web": "^0.3.14",
-    "@pika/plugin-bundle-web": "^0.3.14",
-    "@pika/plugin-standard-pkg": "^0.3.14"
+    "typescript": "^4.3.2",
+    "vite": "^2.3.7"
   },
   "dependencies": {
     "socket.io-client": "^2.2.0",
     "wrtc": "^0.4.1"
   },
   "scripts": {
-    "build": "pika-pack build"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "serve": "vite preview"
   },
   "repository": {
     "type": "git",
@@ -32,21 +31,5 @@
   "bugs": {
     "url": "https://github.com/yousefamar/p2p-peer/issues"
   },
-  "homepage": "https://github.com/yousefamar/p2p-peer#readme",
-  "@pika/pack": {
-    "pipeline": [
-      [
-        "@pika/plugin-standard-pkg"
-      ],
-      [
-        "@pika/plugin-build-web"
-      ],
-      [
-        "@pika/plugin-build-node"
-      ],
-      [
-        "@pika/plugin-bundle-web"
-      ]
-    ]
-  }
+  "homepage": "https://github.com/yousefamar/p2p-peer#readme"
 }

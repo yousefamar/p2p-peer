@@ -1,5 +1,0 @@
-{
-  "imports": {
-    "p2p-peer": "./p2p-peer.js"
-  }
-}

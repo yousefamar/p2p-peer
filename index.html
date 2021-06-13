@@ -1,17 +1,19 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 	<head>
 		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width" />
+		<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>P2P-peer Example</title>
+	</head>
+	<body>
 		<script type="module" charset="utf-8">
-			import PeerNetwork from './web_modules/p2p-peer.js';
+			import PeerNetwork from './src/index.ts';
 
 			window.addEventListener('DOMContentLoaded', async (event) => {
 				const peerNet = window.peerNet = new PeerNetwork();
 
-				//await peerNet.connect('https://sig.amar.io');
-				await peerNet.connect('http://192.168.0.25:8090');
+				await peerNet.connect('https://sig.amar.io');
 
 				let k = 0;
 				peerNet.on('connection', peer => {
@@ -38,7 +40,5 @@
 				});
 			});
 		</script>
-	</head>
-	<body>
-	</body>
+  </body>
 </html>
