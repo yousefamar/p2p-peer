@@ -6,8 +6,8 @@ class Peer extends EventEmitter {
     super();
     this.uid = uid;
     this.network = network;
-    this.rooms = [];
-    this.stream = new MediaStream();
+    this.rooms = []; //this.stream = new MediaStream();
+
     this.conn = new RTCPeerConnection({
       iceServers: [{
         urls: 'stun:stun.amar.io:5349'
@@ -25,7 +25,7 @@ class Peer extends EventEmitter {
 
     this.conn.ondatachannel = event => this.ondatachannel(event.channel);
 
-    this.conn.ontrack = event => this.stream.addTrack(event.track, this.stream);
+    if (this.stream) this.conn.ontrack = event => this.stream.addTrack(event.track, this.stream);
   }
 
   createOffer() {
@@ -158,8 +158,7 @@ export default class PeerNetwork extends EventEmitter {
     });
   }
 
-  setStream(stream) {
-    this.stream = stream;
+  setStream(stream) {//this.stream = stream;
   }
 
   signal(event, ...args) {
@@ -250,9 +249,11 @@ export default class PeerNetwork extends EventEmitter {
       document.body.appendChild(script);
     });
     this.sigServ = io(sigServURL.origin);
+    let hasConnected = false;
     this.sigServ.on('connect', () => {
       //console.log('Peer connected to signalling server');
       this.emit('sigconnect');
+      hasConnected = true;
     });
     this.sigServ.on('disconnect', () => {
       //console.log('Peer disconnected from signalling server');
@@ -263,6 +264,9 @@ export default class PeerNetwork extends EventEmitter {
       this.ownUID = uid;
       this.emit('uid', uid);
     });
+    this.sigServ.on('chime', data => {
+      this.emit('chime', data);
+    });
     this.sigServ.on('join', data => {
       //console.log('A peer with UID', data.uid, 'just joined the room', data.rid);
       if (!(data.uid in this.peers)) {
@@ -271,7 +275,7 @@ export default class PeerNetwork extends EventEmitter {
         peer.on('datachannelopen', peer => this.emit('connection', peer));
         peer.on('datachannelclose', peer => peer.disconnect());
         peer.on('disconnect', () => this.emit('disconnection', peer));
-        this.stream.getTracks().forEach(track => peer.conn.addTrack(track, this.stream));
+        if (this.stream) this.stream.getTracks().forEach(track => peer.conn.addTrack(track, this.stream));
         this.peers[data.uid] = peer;
       }
 
@@ -293,7 +297,7 @@ export default class PeerNetwork extends EventEmitter {
       peer.on('datachannelclose', peer => peer.disconnect());
       peer.on('disconnect', () => this.emit('disconnection', peer));
       peer.createDataChannel(this.ownUID + '_' + data.from);
-      this.stream.getTracks().forEach(track => peer.conn.addTrack(track, this.stream));
+      if (this.stream) this.stream.getTracks().forEach(track => peer.conn.addTrack(track, this.stream));
       peer.createOffer();
       this.peers[data.from] = peer;
     });
@@ -340,6 +344,11 @@ export default class PeerNetwork extends EventEmitter {
       peer.rooms.splice(peer.rooms.indexOf(data.rid), 1);
       if (peer.rooms.length > 0) return;
       peer.disconnect();
+    });
+    if (!hasConnected) await new Promise(resolve => {
+      this.sigServ.on('connect', () => {
+        resolve();
+      });
     });
     return this;
   }
